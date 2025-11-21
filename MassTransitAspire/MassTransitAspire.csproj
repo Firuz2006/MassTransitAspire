@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.0.0">
+
+    <ItemGroup>
+      <ProjectReference Include="..\MassTransit.Api\MassTransit.Api.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.0.0" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <UserSecretsId>82b0a8e8-e025-45bd-9e2e-d273670fea0f</UserSecretsId>
+    </PropertyGroup>
+
+</Project>

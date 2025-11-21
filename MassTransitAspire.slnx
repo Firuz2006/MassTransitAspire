@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="CLAUDE.md" />
+  </Folder>
+  <Project Path="MassTransit.Api/MassTransit.Api.csproj" />
+  <Project Path="MassTransitAspire/MassTransitAspire.csproj" />
+</Solution>
