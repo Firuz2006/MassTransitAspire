@@ -8,23 +8,15 @@ public class CorrelationActivityFilter<T> : IFilter<ConsumeContext<T>> where T :
 
     public async Task Send(ConsumeContext<T> context, IPipe<ConsumeContext<T>> next)
     {
-        var correlationIdGuid = context.CorrelationId ?? context.MessageId ?? Guid.NewGuid();
-        var traceIdString = correlationIdGuid.ToString("N"); // 32 hex chars without hyphens
-
-        // Convert Guid to ActivityTraceId (128-bit)
-        var traceId = ActivityTraceId.CreateFromString(traceIdString.AsSpan());
-        var activityContext = new ActivityContext(
-            traceId,
-            ActivitySpanId.CreateRandom(),
-            ActivityTraceFlags.Recorded);
-
         using var activity = ActivitySource.StartActivity(
-            $"Consumer {typeof(T).Name}",
-            ActivityKind.Consumer,
-            activityContext);
+            $"Process {typeof(T).Name}",
+            ActivityKind.Consumer);
 
+        activity?.SetTag("messaging.system", "rabbitmq");
         activity?.SetTag("messaging.message_type", typeof(T).Name);
-        activity?.SetTag("messaging.correlation_id", correlationIdGuid);
+        activity?.SetTag("messaging.correlation_id", context.CorrelationId);
+        activity?.SetTag("messaging.message_id", context.MessageId);
+        activity?.SetTag("messaging.conversation_id", context.ConversationId);
 
         await next.Send(context);
     }

@@ -10,49 +10,40 @@ using Serilog.Enrichers.Span;
 using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Host.UseSerilog((host, log) =>
 {
     if (host.HostingEnvironment.IsProduction())
-    {
         log.MinimumLevel.Information();
-    }
     else
         log.MinimumLevel.Debug();
 
     log.MinimumLevel.Override("Microsoft", LogEventLevel.Warning);
     log.MinimumLevel.Override("Quartz", LogEventLevel.Information);
     log.Enrich.FromLogContext();
-    log.Enrich.WithSpan(); // Enriches logs with Activity TraceId and SpanId for trace grouping
+    log.Enrich.WithSpan();
     log.Enrich.WithProperty("Application", "MassTransit.Api");
-    // Write to OpenTelemetry instead of Console
-    log.WriteTo.OpenTelemetry();
+    log.WriteTo.Console();
 });
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// Configure OpenTelemetry with distributed tracing and logging
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService("MassTransit.Api"))
     .WithTracing(tracing =>
     {
         tracing
-            .AddSource("MassTransit.Api") // Custom ActivitySource from our filter
-            .AddSource("MassTransit") // Built-in MassTransit tracing
+            .AddSource("MassTransit.Api")
+            .AddSource("MassTransit")
             .AddAspNetCoreInstrumentation()
             .AddConsoleExporter();
     })
-    .WithLogging(logging =>
-    {
-        logging.AddConsoleExporter();
-    });
+    .WithLogging(logging => { logging.AddConsoleExporter(); });
 
 builder.Services.AddMassTransit(x =>
 {
     x.SetKebabCaseEndpointNameFormatter();
 
-    // Register consumers
     x.AddConsumer<CarRegisteredConsumer>();
     x.AddConsumer<CarMaintenanceScheduledConsumer>();
 
@@ -61,20 +52,18 @@ builder.Services.AddMassTransit(x =>
         var connectionString = builder.Configuration.GetConnectionString("messaging");
         cfg.Host(new Uri(connectionString!));
 
-        // Register the correlation activity filter globally
         cfg.UseConsumeFilter(typeof(CorrelationActivityFilter<>), context);
 
         cfg.ConfigureEndpoints(context);
     });
 });
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
 
 var summaries = new[]
 {
@@ -95,20 +84,25 @@ app.MapGet("/weatherforecast", () =>
     })
     .WithName("GetWeatherForecast");
 
-// Car registration endpoint
-app.MapPost("/cars/register", async (CarRegistered carRegistration, IPublishEndpoint publishEndpoint) =>
-    {
-        await publishEndpoint.Publish(carRegistration);
-        return Results.Ok(new { message = "Car registration published", carId = carRegistration.CarId });
-    })
+app.MapPost("/cars/register",
+        async (CarRegistered carRegistration, IPublishEndpoint publishEndpoint, ILogger<Program> logger) =>
+        {
+            logger.LogInformation("Publishing car registration for CarId: {CarId}", carRegistration.CarId);
+            await publishEndpoint.Publish(carRegistration);
+            logger.LogInformation("Car registration published successfully");
+            return Results.Ok(new { message = "Car registration published", carId = carRegistration.CarId });
+        })
     .WithName("RegisterCar");
 
-// Car maintenance scheduling endpoint
-app.MapPost("/cars/maintenance", async (CarMaintenanceScheduled maintenance, IPublishEndpoint publishEndpoint) =>
-    {
-        await publishEndpoint.Publish(maintenance);
-        return Results.Ok(new { message = "Maintenance scheduled", maintenanceId = maintenance.MaintenanceId });
-    })
+app.MapPost("/cars/maintenance",
+        async (CarMaintenanceScheduled maintenance, IPublishEndpoint publishEndpoint, ILogger<Program> logger) =>
+        {
+            logger.LogInformation("Publishing maintenance schedule for MaintenanceId: {MaintenanceId}",
+                maintenance.MaintenanceId);
+            await publishEndpoint.Publish(maintenance);
+            logger.LogInformation("Maintenance scheduled successfully");
+            return Results.Ok(new { message = "Maintenance scheduled", maintenanceId = maintenance.MaintenanceId });
+        })
     .WithName("ScheduleCarMaintenance");
 
 app.Run();
