@@ -1,8 +1,9 @@
+using Azure.Monitor.OpenTelemetry.Exporter;
 using MassTransit;
 using MassTransit.Api.Consumers;
 using MassTransit.Api.Filters;
 using MassTransit.Api.Messages;
-using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
@@ -23,7 +24,8 @@ builder.Host.UseSerilog((host, log) =>
     log.Enrich.FromLogContext();
     log.Enrich.WithSpan();
     log.Enrich.WithProperty("Application", "MassTransit.Api");
-    log.WriteTo.Console();
+    log.WriteTo.OpenTelemetry();
+    // log.WriteTo.Console();
 });
 
 builder.Services.AddOpenApi();
@@ -36,9 +38,22 @@ builder.Services.AddOpenTelemetry()
             .AddSource("MassTransit.Api")
             .AddSource("MassTransit")
             .AddAspNetCoreInstrumentation()
-            .AddConsoleExporter();
+            .AddHttpClientInstrumentation()
+            .AddAzureMonitorTraceExporter(options =>
+            {
+                options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+            });
     })
-    .WithLogging(logging => { logging.AddConsoleExporter(); });
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddAzureMonitorMetricExporter(options =>
+            {
+                options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+            });
+    });
 
 builder.Services.AddMassTransit(x =>
 {
